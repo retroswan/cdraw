@@ -29,7 +29,8 @@ SDL_GPUShader* LoadShader(
 	Uint32 samplerCount,
 	Uint32 uniformBufferCount,
 	Uint32 storageBufferCount,
-	Uint32 storageTextureCount
+	Uint32 storageTextureCount,
+	SDL_GPUShaderStage stage
 );
 SDL_GPUComputePipeline* CreateComputePipelineFromShader(
 	SDL_GPUDevice* device,

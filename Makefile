@@ -33,6 +33,10 @@ clean:
 	rm -f bin/Debug/main
 	rm -f bin/Release/main
 
+.PHONY=shaders
+shaders:
+	cd bin/Debug/Content/Shaders/Source && ./compile.sh
+
 .PHONY=valgrind
 valgrind:
 	valgrind --leak-check=full bin/Debug/main &> valgrind.txt

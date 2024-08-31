@@ -1,4 +1,5 @@
 #include "Common.h"
+#include <math.h>
 #include <stdlib.h> // for srand
 
 static SDL_GPUComputePipeline* ComputePipeline;
@@ -25,7 +26,7 @@ typedef struct ComputeSpriteInstance
     float r, g, b, a;
 } ComputeSpriteInstance;
 
-const Uint32 SPRITE_COUNT = 8192;
+const Uint32 SPRITE_COUNT = 4;
 
 int Init(Context* context)
 {
@@ -67,7 +68,8 @@ int Init(Context* context)
         0,
         1,
         0,
-        0
+        0,
+        SDL_GPU_SHADERSTAGE_VERTEX
     );
 
     SDL_GPUShader* fragShader = LoadShader(
@@ -76,7 +78,8 @@ int Init(Context* context)
         1,
         0,
         0,
-        0
+        0,
+        SDL_GPU_SHADERSTAGE_FRAGMENT
     );
 
     // Create the sprite render pipeline
@@ -338,8 +341,8 @@ int Draw(Context* context)
 
         for (Uint32 i = 0; i < SPRITE_COUNT; i += 1)
         {
-            dataPtr[i].x = (float)(rand() % 640);
-            dataPtr[i].y = (float)(rand() % 480);
+            dataPtr[i].x = i * 8; // (float)(rand() % 640);
+            dataPtr[i].y = i * 8; // (float)(rand() % 480);
             dataPtr[i].z = 0;
             dataPtr[i].w = 1;
             dataPtr[i].rotation = ((float)rand())/(RAND_MAX/(SDL_PI_F * 2));
@@ -348,7 +351,8 @@ int Draw(Context* context)
             dataPtr[i].r = 1.0f;
             dataPtr[i].g = 1.0f;
             dataPtr[i].b = 1.0f;
-            dataPtr[i].a = 1.0f;
+            // TODO: alpha doesn't work
+            dataPtr[i].a = 0.0f;
         }
 
         SDL_UnmapGPUTransferBuffer(context->Device, SpriteComputeTransferBuffer);
@@ -391,7 +395,9 @@ int Draw(Context* context)
             },
             1
         );
-        SDL_DispatchGPUCompute(computePass, SPRITE_COUNT / 64, 1, 1);
+        // FIXME: find out wtf this does
+        // SDL_DispatchGPUCompute(computePass, SPRITE_COUNT / 64, 1, 1);
+        SDL_DispatchGPUCompute(computePass, 1, 1, 1);
 
         SDL_EndGPUComputePass(computePass);
 

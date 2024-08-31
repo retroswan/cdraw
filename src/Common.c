@@ -54,24 +54,9 @@ SDL_GPUShader* LoadShader(
 	Uint32 samplerCount,
 	Uint32 uniformBufferCount,
 	Uint32 storageBufferCount,
-	Uint32 storageTextureCount
+	Uint32 storageTextureCount,
+	SDL_GPUShaderStage stage
 ) {
-	// Auto-detect the shader stage from the file name for convenience
-	SDL_GPUShaderStage stage;
-	if (SDL_strstr(shaderFilename, ".vert"))
-	{
-		stage = SDL_GPU_SHADERSTAGE_VERTEX;
-	}
-	else if (SDL_strstr(shaderFilename, ".frag"))
-	{
-		stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
-	}
-	else
-	{
-		SDL_Log("Invalid shader stage!");
-		return NULL;
-	}
-
 	char fullPath[256];
 	SDL_snprintf(fullPath, sizeof(fullPath), "%sContent/Shaders/Compiled/%s.spv", BasePath, shaderFilename);
 
