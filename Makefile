@@ -1,7 +1,7 @@
 include .env
 
 CC?=gcc
-CFLAGS_DEBUG?=-g -pedantic -std=c99 -Wall -Wextra -Wmissing-prototypes -Wold-style-definition
+CFLAGS_DEBUG?=-g -std=c99
 CFLAGS_RELEASE?=-O2 -std=c99
 CFLAGS?=${CFLAGS_DEBUG}
 INCS?=
