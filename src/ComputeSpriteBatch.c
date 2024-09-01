@@ -1,17 +1,16 @@
 #include "Common.h"
 #include <stdlib.h> // for srand
 
+// TODO: don't use compute for building vertices
 // TODO: more than one texture
 // TODO: load PNG textures
 // TODO: apply additional shaders
 // FIXME: alpha doesn't work
 
-static SDL_GPUComputePipeline* ComputePipeline;
 static SDL_GPUGraphicsPipeline* RenderPipeline;
 static SDL_GPUSampler* Sampler;
 static SDL_GPUTexture* Texture;
-static SDL_GPUTransferBuffer* SpriteComputeTransferBuffer;
-static SDL_GPUBuffer* SpriteComputeBuffer;
+static SDL_GPUTransferBuffer* SpriteVertexTransferBuffer;
 static SDL_GPUBuffer* SpriteVertexBuffer;
 static SDL_GPUBuffer* SpriteIndexBuffer;
 
@@ -22,15 +21,6 @@ typedef struct PositionTextureColorVertex
     float padding_a, padding_b;
     float r, g, b, a;
 } PositionTextureColorVertex;
-
-typedef struct ComputeSpriteInstance
-{
-    float x, y, z;
-    float rotation;
-    float w, h;
-    float padding_a, padding_b;
-    float r, g, b, a;
-} ComputeSpriteInstance;
 
 const Uint32 SPRITE_COUNT = 4098;
 
@@ -43,6 +33,7 @@ int Init(Context* context)
     }
 
     SDL_GPUPresentMode presentMode = SDL_GPU_PRESENTMODE_VSYNC;
+    // TODO: don't do immediate I think?
     if (SDL_SupportsGPUPresentMode(
         context->Device,
         context->Window,
@@ -144,19 +135,6 @@ int Init(Context* context)
     SDL_ReleaseGPUShader(context->Device, vertShader);
     SDL_ReleaseGPUShader(context->Device, fragShader);
 
-    // Create the sprite batch compute pipeline
-    ComputePipeline = CreateComputePipelineFromShader(
-        context->Device,
-        "SpriteBatch.comp",
-        &(SDL_GPUComputePipelineCreateInfo){
-            .readOnlyStorageBufferCount = 1,
-            .writeOnlyStorageBufferCount = 1,
-            .threadCountX = 64,
-            .threadCountY = 1,
-            .threadCountZ = 1
-        }
-    );
-
     // Load the image data
     SDL_Surface *imageData = LoadImage("ravioli.bmp", 4);
     if (imageData == NULL)
@@ -207,25 +185,17 @@ int Init(Context* context)
         }
     );
 
-    SpriteComputeTransferBuffer = SDL_CreateGPUTransferBuffer(
+    SpriteVertexTransferBuffer = SDL_CreateGPUTransferBuffer(
         context->Device,
         &(SDL_GPUTransferBufferCreateInfo) {
-            .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-            .sizeInBytes = SPRITE_COUNT * sizeof(ComputeSpriteInstance)
+            .usage = 0,
+            .sizeInBytes = SPRITE_COUNT * 4 * sizeof(PositionTextureColorVertex)
         }
     );
-
-    SpriteComputeBuffer = SDL_CreateGPUBuffer(
-        context->Device,
-        &(SDL_GPUBufferCreateInfo) {
-            .usageFlags = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ_BIT,
-            .sizeInBytes = SPRITE_COUNT * sizeof(ComputeSpriteInstance)
-        }
-    );
-
     SpriteVertexBuffer = SDL_CreateGPUBuffer(
         context->Device,
         &(SDL_GPUBufferCreateInfo) {
+            // TODO: maybe don't need compute bit anymore?
             .usageFlags = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE_BIT | SDL_GPU_BUFFERUSAGE_VERTEX_BIT,
             .sizeInBytes = SPRITE_COUNT * 4 * sizeof(PositionTextureColorVertex)
         }
@@ -337,87 +307,107 @@ int Draw(Context* context)
     );
 
     if (swapchainTexture != NULL) {
-        // Build sprite instance transfer
-        ComputeSpriteInstance* dataPtr = SDL_MapGPUTransferBuffer(
-            context->Device,
-            SpriteComputeTransferBuffer,
-            SDL_TRUE
-        );
-        
         Uint32 count = 0;
         static int x = 0, y = 0;
         static float rotation = 0;
-
+        
         x += 1;
         y += 1;
-        // rotation += 0.05f;
-
-        for (Uint32 i = 0; i < 2; i ++) {
+        rotation += 0.05f;
+        
+        // TODO: unmap me?
+        PositionTextureColorVertex* vertices = SDL_MapGPUTransferBuffer(
+            context->Device,
+            SpriteVertexTransferBuffer,
+            SDL_TRUE
+        );
+        for (Uint32 i = 0; i < 1; i ++) {
             count++;
-            dataPtr[i].x = (x + (i * 16)) % 640;
-            dataPtr[i].y = (y + (i * 16)) % 480;
-            // FIXME: rotate around center, not origin
-            dataPtr[i].z = 0;
-            dataPtr[i].rotation = rotation + (0.01f * i);
-            dataPtr[i].w = 32;
-            dataPtr[i].h = 32;
-            dataPtr[i].r = 1.0f;
-            dataPtr[i].g = 1.0f;
-            dataPtr[i].b = 1.0f;
-            // TODO: alpha doesn't work
-            dataPtr[i].a = 0.0f;
+            
+            const int u = i * 4;
+            
+            // Top Left
+            {
+                vertices[u + 0].x = x;
+                vertices[u + 0].y = y;
+                vertices[u + 0].z = 1;
+                vertices[u + 0].w = 0;
+                
+                vertices[u + 0].u = 0;
+                vertices[u + 0].v = 0;
+                
+                vertices[u + 0].r = 1.0f;
+                vertices[u + 0].g = 1.0f;
+                vertices[u + 0].b = 1.0f;
+                vertices[u + 0].a = 1.0f;
+            }
+            
+            // Top Right
+            {
+                vertices[u + 1].x = x + 32;
+                vertices[u + 1].y = y;
+                vertices[u + 1].z = 1;
+                vertices[u + 1].w = 0;
+                
+                vertices[u + 1].u = 1;
+                vertices[u + 1].v = 0;
+                
+                vertices[u + 1].r = 1.0f;
+                vertices[u + 1].g = 1.0f;
+                vertices[u + 1].b = 1.0f;
+                vertices[u + 1].a = 1.0f;
+            }
+            
+            // Bottom Left
+            {
+                vertices[u + 2].x = x;
+                vertices[u + 2].y = y + 32;
+                vertices[u + 2].z = 1;
+                vertices[u + 2].w = 0;
+                
+                vertices[u + 2].u = 0;
+                vertices[u + 2].v = 1;
+                
+                vertices[u + 2].r = 1.0f;
+                vertices[u + 2].g = 1.0f;
+                vertices[u + 2].b = 1.0f;
+                vertices[u + 2].a = 1.0f;
+            }
+            
+            // Bottom Right
+            {
+                vertices[u + 3].x = x + 32;
+                vertices[u + 3].y = y + 32;
+                vertices[u + 3].z = 1;
+                vertices[u + 3].w = 0;
+                
+                vertices[u + 3].u = 1;
+                vertices[u + 3].v = 1;
+                
+                vertices[u + 3].r = 1.0f;
+                vertices[u + 3].g = 1.0f;
+                vertices[u + 3].b = 1.0f;
+                vertices[u + 3].a = 1.0f;
+            }
         }
-
-        SDL_UnmapGPUTransferBuffer(context->Device, SpriteComputeTransferBuffer);
-
-        // Upload instance data
+        SDL_UnmapGPUTransferBuffer(context->Device, SpriteVertexTransferBuffer);
+        
         SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmdBuf);
         SDL_UploadToGPUBuffer(
             copyPass,
             &(SDL_GPUTransferBufferLocation) {
-                .transferBuffer = SpriteComputeTransferBuffer,
+                .transferBuffer = SpriteVertexTransferBuffer,
                 .offset = 0
             },
             &(SDL_GPUBufferRegion) {
-                .buffer = SpriteComputeBuffer,
+                .buffer = SpriteVertexBuffer,
                 .offset = 0,
-                // TODO: use `count` instead
-                .size = count * sizeof(ComputeSpriteInstance)
+                .size = count * sizeof(PositionTextureColorVertex) * 4
             },
             SDL_TRUE
         );
         SDL_EndGPUCopyPass(copyPass);
-
-        // Set up compute pass to build vertex buffer
-        SDL_GPUComputePass* computePass = SDL_BeginGPUComputePass(
-            cmdBuf,
-            NULL,
-            0,
-            &(SDL_GPUStorageBufferWriteOnlyBinding){
-                .buffer = SpriteVertexBuffer,
-                .cycle = SDL_TRUE
-            },
-            1
-        );
-
-        SDL_BindGPUComputePipeline(computePass, ComputePipeline);
-        SDL_BindGPUComputeStorageBuffers(
-            computePass,
-            0,
-            &(SDL_GPUBuffer*){
-                SpriteComputeBuffer,
-            },
-            1
-        );
-        // FIXME: find out wtf this does
-        int groupsCount = count / 64;
-        if (groupsCount <= 0) {
-            groupsCount = 1;
-        }
-        SDL_DispatchGPUCompute(computePass, groupsCount, 1, 1);
-
-        SDL_EndGPUComputePass(computePass);
-
+        
         // Render sprites
         SDL_GPURenderPass* renderPass = SDL_BeginGPURenderPass(
             cmdBuf,
@@ -482,12 +472,10 @@ int Draw(Context* context)
 
 void Quit(Context* context)
 {
-    SDL_ReleaseGPUComputePipeline(context->Device, ComputePipeline);
     SDL_ReleaseGPUGraphicsPipeline(context->Device, RenderPipeline);
     SDL_ReleaseGPUSampler(context->Device, Sampler);
     SDL_ReleaseGPUTexture(context->Device, Texture);
-    SDL_ReleaseGPUTransferBuffer(context->Device, SpriteComputeTransferBuffer);
-    SDL_ReleaseGPUBuffer(context->Device, SpriteComputeBuffer);
+    SDL_ReleaseGPUTransferBuffer(context->Device, SpriteVertexTransferBuffer);
     SDL_ReleaseGPUBuffer(context->Device, SpriteVertexBuffer);
     SDL_ReleaseGPUBuffer(context->Device, SpriteIndexBuffer);
 
