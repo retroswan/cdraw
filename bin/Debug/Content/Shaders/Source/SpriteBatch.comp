@@ -71,7 +71,7 @@ void main()
 	vertexData[n*4+1].texcoord = vec2(1, 0);
 	vertexData[n*4+2].texcoord = vec2(0, 1);
 	vertexData[n*4+3].texcoord = vec2(1, 1);
-
+	
 	vertexData[n*4]  .color = currentSpriteData.color;
 	vertexData[n*4+1].color = currentSpriteData.color;
 	vertexData[n*4+2].color = currentSpriteData.color;

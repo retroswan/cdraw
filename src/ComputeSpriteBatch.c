@@ -1,13 +1,16 @@
 #include "Common.h"
-#include <math.h>
 #include <stdlib.h> // for srand
+
+// TODO: more than one texture
+// TODO: load PNG textures
+// TODO: apply additional shaders
+// FIXME: alpha doesn't work
 
 static SDL_GPUComputePipeline* ComputePipeline;
 static SDL_GPUGraphicsPipeline* RenderPipeline;
 static SDL_GPUSampler* Sampler;
 static SDL_GPUTexture* Texture;
 static SDL_GPUTransferBuffer* SpriteComputeTransferBuffer;
-static SDL_GPUTransferBuffer* SpriteVertexTransferBuffer;
 static SDL_GPUBuffer* SpriteComputeBuffer;
 static SDL_GPUBuffer* SpriteVertexBuffer;
 static SDL_GPUBuffer* SpriteIndexBuffer;
@@ -15,7 +18,8 @@ static SDL_GPUBuffer* SpriteIndexBuffer;
 typedef struct PositionTextureColorVertex
 {
     float x, y, z, w;
-    float u, v, padding_a, padding_b;
+    float u, v;
+    float padding_a, padding_b;
     float r, g, b, a;
 } PositionTextureColorVertex;
 
@@ -23,7 +27,8 @@ typedef struct ComputeSpriteInstance
 {
     float x, y, z;
     float rotation;
-    float w, h, padding_a, padding_b;
+    float w, h;
+    float padding_a, padding_b;
     float r, g, b, a;
 } ComputeSpriteInstance;
 
@@ -225,7 +230,7 @@ int Init(Context* context)
             .sizeInBytes = SPRITE_COUNT * 4 * sizeof(PositionTextureColorVertex)
         }
     );
-
+    
     SpriteIndexBuffer = SDL_CreateGPUBuffer(
         context->Device,
         &(SDL_GPUBufferCreateInfo) {
@@ -333,16 +338,9 @@ int Draw(Context* context)
 
     if (swapchainTexture != NULL) {
         // Build sprite instance transfer
-        // TODO: unmap me
         ComputeSpriteInstance* dataPtr = SDL_MapGPUTransferBuffer(
             context->Device,
             SpriteComputeTransferBuffer,
-            SDL_TRUE
-        );
-        
-        SpriteVertexBuffer* sprite = SDL_MapGPUTransferBuffer(
-            context->Device,
-            SpriteVertexBuffer,
             SDL_TRUE
         );
         
@@ -352,15 +350,15 @@ int Draw(Context* context)
 
         x += 1;
         y += 1;
-        rotation += 0.05f;
+        // rotation += 0.05f;
 
-        for (Uint32 i = 0; i < 300; i ++) {
+        for (Uint32 i = 0; i < 2; i ++) {
             count++;
             dataPtr[i].x = (x + (i * 16)) % 640;
             dataPtr[i].y = (y + (i * 16)) % 480;
             // FIXME: rotate around center, not origin
-            dataPtr[i].rotation = rotation + (0.01f * i);
             dataPtr[i].z = 0;
+            dataPtr[i].rotation = rotation + (0.01f * i);
             dataPtr[i].w = 32;
             dataPtr[i].h = 32;
             dataPtr[i].r = 1.0f;
@@ -467,7 +465,6 @@ int Draw(Context* context)
         );
         SDL_DrawGPUIndexedPrimitives(
             renderPass,
-            // TODO: use `count` instead
             count * 6,
             1,
             0,

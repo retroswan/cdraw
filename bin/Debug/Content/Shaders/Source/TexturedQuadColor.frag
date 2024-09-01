@@ -11,7 +11,9 @@ void main()
 {
 	FragColor = Color * texture(Sampler, TexCoord);
 	
-	if (FragColor.g == 0) {
+	if (
+		FragColor.rgb == vec3(0, 0, 0)
+	) {
 		discard;
 	}
 	
