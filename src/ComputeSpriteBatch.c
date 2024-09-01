@@ -7,6 +7,7 @@ static SDL_GPUGraphicsPipeline* RenderPipeline;
 static SDL_GPUSampler* Sampler;
 static SDL_GPUTexture* Texture;
 static SDL_GPUTransferBuffer* SpriteComputeTransferBuffer;
+static SDL_GPUTransferBuffer* SpriteVertexTransferBuffer;
 static SDL_GPUBuffer* SpriteComputeBuffer;
 static SDL_GPUBuffer* SpriteVertexBuffer;
 static SDL_GPUBuffer* SpriteIndexBuffer;
@@ -26,7 +27,7 @@ typedef struct ComputeSpriteInstance
     float r, g, b, a;
 } ComputeSpriteInstance;
 
-const Uint32 SPRITE_COUNT = 4;
+const Uint32 SPRITE_COUNT = 4098;
 
 int Init(Context* context)
 {
@@ -330,22 +331,36 @@ int Draw(Context* context)
         &h
     );
 
-    if (swapchainTexture != NULL)
-    {
+    if (swapchainTexture != NULL) {
         // Build sprite instance transfer
+        // TODO: unmap me
         ComputeSpriteInstance* dataPtr = SDL_MapGPUTransferBuffer(
             context->Device,
             SpriteComputeTransferBuffer,
             SDL_TRUE
         );
+        
+        SpriteVertexBuffer* sprite = SDL_MapGPUTransferBuffer(
+            context->Device,
+            SpriteVertexBuffer,
+            SDL_TRUE
+        );
+        
+        Uint32 count = 0;
+        static int x = 0, y = 0;
+        static float rotation = 0;
 
-        for (Uint32 i = 0; i < SPRITE_COUNT; i += 1)
-        {
-            dataPtr[i].x = i * 8; // (float)(rand() % 640);
-            dataPtr[i].y = i * 8; // (float)(rand() % 480);
+        x += 1;
+        y += 1;
+        rotation += 0.05f;
+
+        for (Uint32 i = 0; i < 300; i ++) {
+            count++;
+            dataPtr[i].x = (x + (i * 16)) % 640;
+            dataPtr[i].y = (y + (i * 16)) % 480;
+            // FIXME: rotate around center, not origin
+            dataPtr[i].rotation = rotation + (0.01f * i);
             dataPtr[i].z = 0;
-            dataPtr[i].w = 1;
-            dataPtr[i].rotation = ((float)rand())/(RAND_MAX/(SDL_PI_F * 2));
             dataPtr[i].w = 32;
             dataPtr[i].h = 32;
             dataPtr[i].r = 1.0f;
@@ -368,7 +383,8 @@ int Draw(Context* context)
             &(SDL_GPUBufferRegion) {
                 .buffer = SpriteComputeBuffer,
                 .offset = 0,
-                .size = SPRITE_COUNT * sizeof(ComputeSpriteInstance)
+                // TODO: use `count` instead
+                .size = count * sizeof(ComputeSpriteInstance)
             },
             SDL_TRUE
         );
@@ -396,8 +412,11 @@ int Draw(Context* context)
             1
         );
         // FIXME: find out wtf this does
-        // SDL_DispatchGPUCompute(computePass, SPRITE_COUNT / 64, 1, 1);
-        SDL_DispatchGPUCompute(computePass, 1, 1, 1);
+        int groupsCount = count / 64;
+        if (groupsCount <= 0) {
+            groupsCount = 1;
+        }
+        SDL_DispatchGPUCompute(computePass, groupsCount, 1, 1);
 
         SDL_EndGPUComputePass(computePass);
 
@@ -448,7 +467,8 @@ int Draw(Context* context)
         );
         SDL_DrawGPUIndexedPrimitives(
             renderPass,
-            SPRITE_COUNT * 6,
+            // TODO: use `count` instead
+            count * 6,
             1,
             0,
             0,

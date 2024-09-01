@@ -13,7 +13,7 @@ int main(int argc, char **argv)
 	};
 	int quit = 0;
 	float lastTime = 0;
-
+	
 	if (SDL_Init(SDL_INIT_VIDEO) < 0)
 	{
 		SDL_Log("Failed to initialize SDL: %s", SDL_GetError());
@@ -59,7 +59,7 @@ int main(int argc, char **argv)
 			return 1;
 		}
 		
-		SDL_Delay(1000);
+		SDL_Delay(16);
 	}
 
 	return 0;
