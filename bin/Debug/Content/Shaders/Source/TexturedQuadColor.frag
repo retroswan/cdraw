@@ -16,6 +16,4 @@ void main()
 	) {
 		discard;
 	}
-	
-	FragColor.a = 0.1;
 }
