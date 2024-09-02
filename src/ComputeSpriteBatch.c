@@ -1,4 +1,5 @@
 #include "Common.h"
+#include "CDraw/Vertex.h"
 
 static SDL_GPUGraphicsPipeline* Pipeline;
 static SDL_GPUBuffer* VertexBuffer;
@@ -65,21 +66,30 @@ int Init(Context* context)
                 .binding = 0,
                 .inputRate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
                 .instanceStepRate = 0,
-                .stride = sizeof(PositionTextureVertex)
+                .stride = sizeof(CDraw_Vertex)
             }},
             // TODO: modify this to allow more attributes
-            .vertexAttributeCount = 2,
-            .vertexAttributes = (SDL_GPUVertexAttribute[]){{
-                .binding = 0,
-                .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
-                .location = 0,
-                .offset = 0
-            }, {
-                .binding = 0,
-                .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-                .location = 1,
-                .offset = sizeof(float) * 3
-            }}
+            .vertexAttributeCount = 3,
+            .vertexAttributes = (SDL_GPUVertexAttribute[]){
+                {
+                    .binding = 0,
+                    .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
+                    .location = 0,
+                    .offset = 0
+                },
+                {
+                    .binding = 0,
+                    .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+                    .location = 1,
+                    .offset = sizeof(float) * 3
+                },
+                {
+                    .binding = 0,
+                    .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+                    .location = 2,
+                    .offset = sizeof(float) * 5,
+                },
+            }
         },
         .multisampleState.sampleMask = 0xFFFF,
         .primitiveType = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
@@ -112,7 +122,7 @@ int Init(Context* context)
         context->Device,
         &(SDL_GPUBufferCreateInfo) {
             .usageFlags = SDL_GPU_BUFFERUSAGE_VERTEX_BIT,
-            .sizeInBytes = sizeof(PositionTextureVertex) * 4 * SPRITE_COUNT
+            .sizeInBytes = sizeof(CDraw_Vertex) * 4 * SPRITE_COUNT
         }
     );
     // TODO: we can probly delete this
@@ -150,11 +160,11 @@ int Init(Context* context)
         context->Device,
         &(SDL_GPUTransferBufferCreateInfo) {
             .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-            .sizeInBytes = (sizeof(PositionTextureVertex) * 4 * SPRITE_COUNT) + (sizeof(Uint16) * 6 * SPRITE_COUNT)
+            .sizeInBytes = (sizeof(CDraw_Vertex) * 4 * SPRITE_COUNT) + (sizeof(Uint16) * 6 * SPRITE_COUNT)
         }
     );
 
-    PositionTextureVertex* transferData = SDL_MapGPUTransferBuffer(
+    CDraw_Vertex* transferData = SDL_MapGPUTransferBuffer(
         context->Device,
         bufferTransferBuffer,
         SDL_FALSE
@@ -162,17 +172,25 @@ int Init(Context* context)
     
     SpriteBatchCount = 2;
     
+    const CDraw_Color white = {
+        .r = 1.0f,
+        .g = 0.0f,
+        .b = 1.0f,
+        .a = 1.0f,
+    };
+    
     // Sprite 1
-    transferData[0] = (PositionTextureVertex) { .x = -1, .y = 0, .z = 0, .u = 0, .v = 0 };
-    transferData[1] = (PositionTextureVertex) { .x = 0, .y = 0, .z = 0, .u = 1, .v = 0 };
-    transferData[2] = (PositionTextureVertex) { .x = 0, .y = -1, .z = 0, .u = 1, .v = 1 };
-    transferData[3] = (PositionTextureVertex) { .x = -1, .y = -1, .z = 0, .u = 0, .v = 1 };
+    transferData[0] = (CDraw_Vertex) { .x = -1, .y = 0, .z = 0, .u = 0, .v = 0, .color = white };
+    transferData[1] = (CDraw_Vertex) { .x = 0, .y = 0, .z = 0, .u = 1, .v = 0, .color = white };
+    transferData[2] = (CDraw_Vertex) { .x = 0, .y = -1, .z = 0, .u = 1, .v = 1, .color = white };
+    transferData[3] = (CDraw_Vertex) { .x = -1, .y = -1, .z = 0, .u = 0, .v = 1, .color = white };
     
     // Sprite 2
-    transferData[4] = (PositionTextureVertex) { .x = 0, .y = 1, .z = 0, .u = 0, .v = 0 };
-    transferData[5] = (PositionTextureVertex) { .x = 1, .y = 1, .z = 0, .u = 1, .v = 0 };
-    transferData[6] = (PositionTextureVertex) { .x = 1, .y = 0, .z = 0, .u = 1, .v = 1 };
-    transferData[7] = (PositionTextureVertex) { .x = 0, .y = 0, .z = 0, .u = 0, .v = 1 };
+    transferData[4] = (CDraw_Vertex) { .x = 0, .y = 1, .z = 0, .u = 0, .v = 0, .color = white };
+    transferData[5] = (CDraw_Vertex) { .x = 1, .y = 1, .z = 0, .u = 1, .v = 0, .color = white };
+    transferData[6] = (CDraw_Vertex) { .x = 1, .y = 0, .z = 0, .u = 1, .v = 1, .color = white };
+    transferData[7] = (CDraw_Vertex) { .x = 0, .y = 0, .z = 0, .u = 0, .v = 1, .color = white };
+    
     
     Uint16* indexData = (Uint16*) &transferData[4 * SPRITE_COUNT];
     for (int i = 0; i < SPRITE_COUNT; i++) {
@@ -218,7 +236,7 @@ int Init(Context* context)
         &(SDL_GPUBufferRegion) {
             .buffer = VertexBuffer,
             .offset = 0,
-            .size = sizeof(PositionTextureVertex) * 4 * SpriteBatchCount
+            .size = sizeof(CDraw_Vertex) * 4 * SpriteBatchCount
         },
         SDL_FALSE
     );
@@ -227,7 +245,7 @@ int Init(Context* context)
         copyPass,
         &(SDL_GPUTransferBufferLocation) {
             .transferBuffer = bufferTransferBuffer,
-            .offset = sizeof(PositionTextureVertex) * 4 * SPRITE_COUNT
+            .offset = sizeof(CDraw_Vertex) * 4 * SPRITE_COUNT
         },
         &(SDL_GPUBufferRegion) {
             .buffer = IndexBuffer,
