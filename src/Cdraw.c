@@ -20,7 +20,7 @@ int Init(Context* context)
     }
 
     // Create the shaders
-    SDL_GPUShader* vertexShader = LoadShader(context->Device, "TexturedQuad.vert", 0, 0, 0, 0, SDL_GPU_SHADERSTAGE_VERTEX);
+    SDL_GPUShader* vertexShader = LoadShader(context->Device, "TexturedQuad.vert", 0, 1, 0, 0, SDL_GPU_SHADERSTAGE_VERTEX);
     if (vertexShader == NULL)
     {
         SDL_Log("Failed to create vertex shader!");
@@ -177,18 +177,25 @@ int Init(Context* context)
         .a = 1.0f,
     };
     
+    float x = 0, y = 32;
+    float width = 32, height = 32;
+    
     // Stage Sprites
-    SpriteBatchCount = 2;
+    SpriteBatchCount = 1;
     // Sprite 1
-    transferData[0] = (CDraw_Vertex) { .x = -1, .y = 0, .z = 0, .u = 0, .v = 0, .color = white };
-    transferData[1] = (CDraw_Vertex) { .x = 0, .y = 0, .z = 0, .u = 1, .v = 0, .color = white };
-    transferData[2] = (CDraw_Vertex) { .x = 0, .y = -1, .z = 0, .u = 1, .v = 1, .color = white };
-    transferData[3] = (CDraw_Vertex) { .x = -1, .y = -1, .z = 0, .u = 0, .v = 1, .color = white };
+    transferData[0] = (CDraw_Vertex) { .x = x, .y = y, .z = 0, .u = 0, .v = 0, .color = white };
+    transferData[1] = (CDraw_Vertex) { .x = x + width, .y = y, .z = 0, .u = 1, .v = 0, .color = white };
+    transferData[2] = (CDraw_Vertex) { .x = x + width, .y = y + height, .z = 0, .u = 1, .v = 1, .color = white };
+    transferData[3] = (CDraw_Vertex) { .x = x, .y = y + height, .z = 0, .u = 0, .v = 1, .color = white };
+    // transferData[0] = (CDraw_Vertex) { .x = -1, .y = 0, .z = 0, .u = 0, .v = 0, .color = white };
+    // transferData[1] = (CDraw_Vertex) { .x = 0, .y = 0, .z = 0, .u = 1, .v = 0, .color = white };
+    // transferData[2] = (CDraw_Vertex) { .x = 0, .y = -1, .z = 0, .u = 1, .v = 1, .color = white };
+    // transferData[3] = (CDraw_Vertex) { .x = -1, .y = -1, .z = 0, .u = 0, .v = 1, .color = white };
     // Sprite 2
-    transferData[4] = (CDraw_Vertex) { .x = 0, .y = 1, .z = 0, .u = 0, .v = 0, .color = white };
-    transferData[5] = (CDraw_Vertex) { .x = 1, .y = 1, .z = 0, .u = 1, .v = 0, .color = white };
-    transferData[6] = (CDraw_Vertex) { .x = 1, .y = 0, .z = 0, .u = 1, .v = 1, .color = white };
-    transferData[7] = (CDraw_Vertex) { .x = 0, .y = 0, .z = 0, .u = 0, .v = 1, .color = white };
+    // transferData[4] = (CDraw_Vertex) { .x = 0, .y = 1, .z = 0, .u = 0, .v = 0, .color = white };
+    // transferData[5] = (CDraw_Vertex) { .x = 1, .y = 1, .z = 0, .u = 1, .v = 0, .color = white };
+    // transferData[6] = (CDraw_Vertex) { .x = 1, .y = 0, .z = 0, .u = 1, .v = 1, .color = white };
+    // transferData[7] = (CDraw_Vertex) { .x = 0, .y = 0, .z = 0, .u = 0, .v = 1, .color = white };
     
     Uint16* indexData = (Uint16*) &transferData[4 * SPRITE_COUNT];
     for (int i = 0; i < SPRITE_COUNT; i++) {
@@ -319,7 +326,12 @@ int Draw(Context* context)
         SDL_BindGPUVertexBuffers(renderPass, 0, &(SDL_GPUBufferBinding){ .buffer = VertexBuffer, .offset = 0 }, 1);
         SDL_BindGPUIndexBuffer(renderPass, &(SDL_GPUBufferBinding){ .buffer = IndexBuffer, .offset = 0 }, SDL_GPU_INDEXELEMENTSIZE_16BIT);
         SDL_BindGPUFragmentSamplers(renderPass, 0, &(SDL_GPUTextureSamplerBinding){ .texture = Texture, .sampler = Sampler }, 1);
-        // TODO: use spritebatch count instead of sprite count
+        SDL_PushGPUVertexUniformData(
+            cmdbuf,
+            0,
+            &cameraMatrix,
+            sizeof(Matrix4x4)
+        );
         SDL_DrawGPUIndexedPrimitives(renderPass, SpriteBatchCount * 6, 1, 0, 0, 0);
 
         SDL_EndGPURenderPass(renderPass);
