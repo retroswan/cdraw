@@ -287,6 +287,15 @@ int Update(Context* context)
 
 int Draw(Context* context)
 {
+    Matrix4x4 cameraMatrix = Matrix4x4_CreateOrthographicOffCenter(
+        0,
+        640,
+        480,
+        0,
+        0,
+        -1
+    );
+    
     SDL_GPUCommandBuffer* cmdbuf = SDL_AcquireGPUCommandBuffer(context->Device);
     if (cmdbuf == NULL)
     {
