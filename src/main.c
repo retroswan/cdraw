@@ -59,7 +59,7 @@ int main(int argc, char **argv)
 			return 1;
 		}
 		
-		SDL_Delay(16);
+		SDL_Delay(1000 / 60);
 	}
 
 	return 0;

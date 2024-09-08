@@ -12,14 +12,21 @@ static const int SPRITE_COUNT = 2;
 static int SpriteBatchCount = 0;
 
 static void DrawSprites(Context* context, SDL_GPUCommandBuffer* cmdbuf);
+static void StageSprite(CDraw_Vertex* transferData, float x, float y, float width, float height, CDraw_Color color);
 
-// TODO: abstract staging sprites to a method
-// TODO: sprite rotation
-// TODO: sprite scale
-// TODO: sprite animation
+static SDL_GPUTexture* renderTarget;
+
+// Needs
+// TODO: abstract texture creation into a method
 // TODO: multiple textures
 // TODO: PNG textures
 // TODO: render targets
+
+// Stretch Goals
+// TODO: sprite rotation
+// TODO: sprite scale
+// TODO: sprite animation
+// TODO: depth
 
 // FIXME: alpha broken
 
@@ -105,7 +112,8 @@ int Init(Context* context)
         .multisampleState.sampleMask = 0xFFFF,
         .primitiveType = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
         .vertexShader = vertexShader,
-        .fragmentShader = fragmentShader
+        .fragmentShader = fragmentShader,
+        // TODO: depth stencil state here
     };
 
     Pipeline = SDL_CreateGPUGraphicsPipeline(context->Device, &pipelineCreateInfo);
@@ -252,10 +260,24 @@ int Init(Context* context)
     SDL_ReleaseGPUTransferBuffer(context->Device, textureTransferBuffer);
     
     SDL_SubmitGPU(uploadCmdBuf);
-
-    // Finally, print instructions!
-    SDL_Log("Press Left/Right to switch between sampler states");
-
+    
+    // Create render target
+    renderTarget = SDL_CreateGPUTexture(context->Device, &(SDL_GPUTextureCreateInfo){
+        .type = SDL_GPU_TEXTURETYPE_2D,
+        .format = SDL_GetGPUSwapchainTextureFormat(context->Device, context->Window),
+        .width = 160,
+        .height = 90,
+        .layerCountOrDepth = 1,
+        .levelCount = 1,
+        .usageFlags = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT | SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT,
+    });
+    SDL_SetGPUTextureName(
+        context->Device,
+        renderTarget,
+        "retroswan's Render Target"
+    );
+    // TODO: possibly all this stuff
+    
     return 0;
 }
 
@@ -267,6 +289,14 @@ int Update(Context* context)
 int Draw(Context* context)
 {
     Matrix4x4 cameraMatrix = Matrix4x4_CreateOrthographicOffCenter(
+        0,
+        160,
+        90,
+        0,
+        0,
+        -1
+    );
+    Matrix4x4 viewportMatrix = Matrix4x4_CreateOrthographicOffCenter(
         0,
         640,
         480,
@@ -285,7 +315,8 @@ int Draw(Context* context)
     DrawSprites(context, cmdbuf);
 
     Uint32 w, h;
-    SDL_GPUTexture* swapchainTexture = SDL_AcquireGPUSwapchainTexture(cmdbuf, context->Window, &w, &h);
+    // SDL_GPUTexture* swapchainTexture = SDL_AcquireGPUSwapchainTexture(cmdbuf, context->Window, &w, &h);
+    SDL_GPUTexture* swapchainTexture = renderTarget;
     if (swapchainTexture != NULL)
     {
         SDL_GPUColorAttachmentInfo colorAttachmentInfo = { 0 };
@@ -310,6 +341,75 @@ int Draw(Context* context)
 
         SDL_EndGPURenderPass(renderPass);
     }
+    
+    // RENDER THE RENDER TARGET ON SCREEN
+    SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(cmdbuf);
+    SDL_GPUTransferBuffer* bufferTransferBuffer = SDL_CreateGPUTransferBuffer(
+        context->Device,
+        &(SDL_GPUTransferBufferCreateInfo) {
+            .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+            .sizeInBytes = (sizeof(CDraw_Vertex) * 4 * SPRITE_COUNT) + (sizeof(Uint16) * 6 * SPRITE_COUNT)
+        }
+    );
+    CDraw_Vertex* transferData = SDL_MapGPUTransferBuffer(
+        context->Device,
+        bufferTransferBuffer,
+        SDL_FALSE
+    );
+    SDL_UploadToGPUBuffer(
+        copyPass,
+        &(SDL_GPUTransferBufferLocation) {
+            .transferBuffer = bufferTransferBuffer,
+            .offset = 0
+        },
+        &(SDL_GPUBufferRegion) {
+            .buffer = VertexBuffer,
+            .offset = 0,
+            .size = sizeof(CDraw_Vertex) * 4 * SpriteBatchCount
+        },
+        SDL_FALSE
+    );
+    const CDraw_Color color = {
+        .r = 1.0f,
+        .g = 1.0f,
+        .b = 1.0f,
+        // TODO: alpha isn't working
+        .a = 1.0f,
+    };
+    int width = 160 * 4, height = 90 * 4;
+    SpriteBatchCount = 1;
+    transferData[0] = (CDraw_Vertex) { .x = 0, .y = 60, .z = 0, .u = 0, .v = 0, .color = color };
+    transferData[1] = (CDraw_Vertex) { .x = 0 + width, .y = 60, .z = 0, .u = 1, .v = 0, .color = color };
+    transferData[2] = (CDraw_Vertex) { .x = 0 + width, .y = 60 + height, .z = 0, .u = 1, .v = 1, .color = color };
+    transferData[3] = (CDraw_Vertex) { .x = 0, .y = 60 + height, .z = 0, .u = 0, .v = 1, .color = color };
+    SDL_UnmapGPUTransferBuffer(context->Device, bufferTransferBuffer);
+    SDL_EndGPUCopyPass(copyPass);
+    swapchainTexture = SDL_AcquireGPUSwapchainTexture(cmdbuf, context->Window, &w, &h);
+    if (swapchainTexture != NULL)
+    {
+        SDL_GPUColorAttachmentInfo colorAttachmentInfo = { 0 };
+        colorAttachmentInfo.texture = swapchainTexture;
+        colorAttachmentInfo.clearColor = (SDL_FColor){ 0.0f, 1.0f, 0.0f, 1.0f };
+        colorAttachmentInfo.loadOp = SDL_GPU_LOADOP_CLEAR;
+        colorAttachmentInfo.storeOp = SDL_GPU_STOREOP_STORE;
+
+        SDL_GPURenderPass* renderPass = SDL_BeginGPURenderPass(cmdbuf, &colorAttachmentInfo, 1, NULL);
+
+        SDL_BindGPUGraphicsPipeline(renderPass, Pipeline);
+        SDL_BindGPUVertexBuffers(renderPass, 0, &(SDL_GPUBufferBinding){ .buffer = VertexBuffer, .offset = 0 }, 1);
+        SDL_BindGPUIndexBuffer(renderPass, &(SDL_GPUBufferBinding){ .buffer = IndexBuffer, .offset = 0 }, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+        SDL_BindGPUFragmentSamplers(renderPass, 0, &(SDL_GPUTextureSamplerBinding){ .texture = renderTarget, .sampler = Sampler }, 1);
+        SDL_PushGPUVertexUniformData(
+            cmdbuf,
+            0,
+            &viewportMatrix,
+            sizeof(Matrix4x4)
+        );
+        SDL_DrawGPUIndexedPrimitives(renderPass, SpriteBatchCount * 6, 1, 0, 0, 0);
+
+        SDL_EndGPURenderPass(renderPass);
+    }
+    // END RENDER TARGET
 
     SDL_SubmitGPU(cmdbuf);
 
@@ -318,6 +418,8 @@ int Draw(Context* context)
 
 void Quit(Context* context)
 {
+    SDL_ReleaseGPUTexture(context->Device, renderTarget);
+    
     SDL_ReleaseGPUGraphicsPipeline(context->Device, Pipeline);
     SDL_ReleaseGPUBuffer(context->Device, VertexBuffer);
     SDL_ReleaseGPUBuffer(context->Device, IndexBuffer);
@@ -343,6 +445,11 @@ static void DrawSprites(Context* context, SDL_GPUCommandBuffer* cmdbuf)
         SDL_FALSE
     );
     
+    static float baseX = 0, baseY = 0;
+    
+    float x = baseX, y = baseY;
+    float width = 16, height = 16;
+    
     const CDraw_Color white = {
         .r = 1.0f,
         .g = 1.0f,
@@ -350,28 +457,20 @@ static void DrawSprites(Context* context, SDL_GPUCommandBuffer* cmdbuf)
         // TODO: alpha isn't working
         .a = 1.0f,
     };
+    const CDraw_Color purple = {
+        .r = 0.5f,
+        .g = 0.0f,
+        .b = 0.5f,
+        // TODO: alpha isn't working
+        .a = 1.0f,
+    };
     
-    static float baseX = 0, baseY = 0;
+    SpriteBatchCount = 0;
+    StageSprite(transferData, x, y, width, height, white);
+    StageSprite(transferData, x + (width * 2), y, width, height, purple);
     
-    float x = baseX, y = baseY;
-    float width = 32, height = 32;
-    
-    // Stage Sprites
-    SpriteBatchCount = 2;
-    // Sprite 1
-    transferData[0] = (CDraw_Vertex) { .x = x, .y = y, .z = 0, .u = 0, .v = 0, .color = white };
-    transferData[1] = (CDraw_Vertex) { .x = x + width, .y = y, .z = 0, .u = 1, .v = 0, .color = white };
-    transferData[2] = (CDraw_Vertex) { .x = x + width, .y = y + height, .z = 0, .u = 1, .v = 1, .color = white };
-    transferData[3] = (CDraw_Vertex) { .x = x, .y = y + height, .z = 0, .u = 0, .v = 1, .color = white };
-    // Sprite 2
-    x += 64;
-    transferData[4] = (CDraw_Vertex) { .x = x, .y = y, .z = 0, .u = 0, .v = 0, .color = white };
-    transferData[5] = (CDraw_Vertex) { .x = x + width, .y = y, .z = 0, .u = 1, .v = 0, .color = white };
-    transferData[6] = (CDraw_Vertex) { .x = x + width, .y = y + height, .z = 0, .u = 1, .v = 1, .color = white };
-    transferData[7] = (CDraw_Vertex) { .x = x, .y = y + height, .z = 0, .u = 0, .v = 1, .color = white };
-    
-    baseX++;
-    baseY++;
+    baseX = (int)(baseX + 1) % 160;
+    baseY = (int)(baseY + 1) % 90;
     
     SDL_UploadToGPUBuffer(
         copyPass,
@@ -389,4 +488,16 @@ static void DrawSprites(Context* context, SDL_GPUCommandBuffer* cmdbuf)
     
     SDL_UnmapGPUTransferBuffer(context->Device, bufferTransferBuffer);
     SDL_EndGPUCopyPass(copyPass);
+}
+
+static void StageSprite(CDraw_Vertex* transferData, float x, float y, float width, float height, CDraw_Color color)
+{
+    const int u = SpriteBatchCount * 4;
+    
+    transferData[u + 0] = (CDraw_Vertex) { .x = x, .y = y, .z = 0, .u = 0, .v = 0, .color = color };
+    transferData[u + 1] = (CDraw_Vertex) { .x = x + width, .y = y, .z = 0, .u = 1, .v = 0, .color = color };
+    transferData[u + 2] = (CDraw_Vertex) { .x = x + width, .y = y + height, .z = 0, .u = 1, .v = 1, .color = color };
+    transferData[u + 3] = (CDraw_Vertex) { .x = x, .y = y + height, .z = 0, .u = 0, .v = 1, .color = color };
+    
+    SpriteBatchCount++;
 }

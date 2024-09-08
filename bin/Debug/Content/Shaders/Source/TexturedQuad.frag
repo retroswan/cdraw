@@ -8,4 +8,10 @@ layout (set = 2, binding = 0) uniform sampler2D Sampler;
 void main()
 {
 	FragColor = texture(Sampler, TexCoord) * Color;
+	
+	// if (FragColor.rgb == vec3(0, 0, 0)) {
+	// 	FragColor = Color;
+	// }
+	
+	// FragColor.rgb += dFdy(FragColor).rgb * vec3(3, 0, -3);
 }

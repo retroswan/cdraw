@@ -2,7 +2,7 @@
 bin/Debug/main
 bin/Debug/*.so.*
 bin/Release/*
-src/*.o
+*.o
 vendor
 .env
 valgrind.txt
